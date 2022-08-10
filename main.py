@@ -1,25 +1,30 @@
 # This is a sample Python script.
-from typing import Optional, Awaitable, List
+from typing import Optional, Awaitable
 import asyncio
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, timedelta
+from configparser import ConfigParser
+from urllib.parse import urlencode
 
 from tornado.web import RequestHandler, Application, StaticFileHandler
-from tornado.httpclient import HTTPRequest, HTTPClient
+from tornado.httpclient import HTTPRequest, AsyncHTTPClient
+from tornado.ioloop import  IOLoop
 from sanction import _default_parser as parser
-
-
-CONFIG = {
-    'CLIENT_ID': 'PiKbg9eAY7KKBx8fI0BKxi6GcLKoTWEV',
-    'CLIENT_SECRET': 'yex6ajKYRekqVFoq',
-    'REDIRECT': 'http://0.tcp.ngrok.io:18517/redirect'
-}
 
 PRODUCTION_SERVER = "api.dexcom.com"
 DEV_SERVER = "sandbox-api.dexcom.com"
 CURRENT_SERVER = DEV_SERVER
 
-http_client = HTTPClient()
+credentials = ConfigParser()
+
+CONFIG = {
+    'CLIENT_ID': credentials['OAuth']['CLIENT_ID'],
+    'CLIENT_SECRET': credentials['OAuth']['CLIENT_SECRET'],
+    'REDIRECT': 'http://4.tcp.ngrok.io:14519/redirect',
+    'GLUCOSE_CHECK': f'https://{CURRENT_SERVER}/v2/users/self/egvs'
+}
+
+
+http_client = AsyncHTTPClient()
 
 
 class Redirect(RequestHandler):
@@ -66,18 +71,19 @@ class UpdateGlucose(RequestHandler):
         pass
 
     def get(self):
-        params = [
-            ['startDate', (datetime.now() - timedelta(minutes=10)).isoformat()],
-            ['endDate', datetime.now().isoformat()]
-        ]
-        params = ['='.join(p) for p in params]
-        params = '&'.join(params)
-        params = '?' + params
-        URI = f"https://{CURRENT_SERVER}//v2/users/self/egvs{params}"
+        query = {
+            'startDate': (datetime.now() - timedelta(minutes=10)).isoformat(),
+            'endDate': datetime.now().isoformat(),
+        }
+        URI = f"{CONFIG['GLUCOSE_CHECK']}?{urlencode(query)}"
         print(URI)
+        IOLoop.current().add_callback(self.get_glucose, URI)
+
+    async def get_glucose(self, URI):
+        print(f'Token: {WebApp.oauthClient.access_token}')
         request = HTTPRequest(URI,
                     headers={'authorization': f'Bearer: {WebApp.oauthClient.access_token}'})
-        response = http_client.fetch(request)
+        response = await http_client.fetch(request)
         self.write(response.body)
 
 class WebApp:
