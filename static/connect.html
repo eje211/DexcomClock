@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Connect to Dexcom</title>
+    <script src="https://releases.jquery.com/git/jquery-3.x-git.slim.min.js"></script>
+    <script type="text/javascript" charset="UTF-8">
+        (function() {
+            "use strict";
+            $(document).ready(function() {
+                $("#connect").click(function() {
+                    window.location = window.location.origin + '/startoauth';
+                    return false;
+                });
+            });
+        }());
+    </script>
+</head>
+<body>
+    <p>
+        <button id="connect">Connect</button>
+    </p>
+</body>
+</html>
