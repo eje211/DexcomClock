@@ -1,118 +1,51 @@
-# This is a sample Python script.
-from typing import Optional, Awaitable
-import asyncio
-from datetime import datetime, timedelta
 from configparser import ConfigParser
-from urllib.parse import urlencode
-
-from tornado.web import RequestHandler, Application, StaticFileHandler
-from tornado.httpclient import HTTPRequest, AsyncHTTPClient
-from tornado.ioloop import  IOLoop
-from sanction import _default_parser as parser
-
-PRODUCTION_SERVER = "api.dexcom.com"
-DEV_SERVER = "sandbox-api.dexcom.com"
-CURRENT_SERVER = DEV_SERVER
+from pydexcom import Dexcom, GlucoseReading
+from typing import Optional
+from dataclasses import dataclass
 
 credentials = ConfigParser()
-
-CONFIG = {
-    'CLIENT_ID': credentials['OAuth']['CLIENT_ID'],
-    'CLIENT_SECRET': credentials['OAuth']['CLIENT_SECRET'],
-    'REDIRECT': 'http://4.tcp.ngrok.io:14519/redirect',
-    'GLUCOSE_CHECK': f'https://{CURRENT_SERVER}/v2/users/self/egvs'
-}
+credentials.read('credentials.conf')
 
 
-http_client = AsyncHTTPClient()
+@dataclass
+class Config:
+    username = credentials['Login']['USERNAME']
+    password = credentials['Login']['PASSWORD']
 
 
-class Redirect(RequestHandler):
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
-        pass
+class DexcomClock:
 
-    def get(self):
+    def __init__(self):
+        self._dexcom: Optional[Dexcom] = None
+        self._blood_glucose: Optional[GlucoseReading] = None
 
+    def connect(self):
+        """
+        Connects to the Dexcom server and sets the "connected" instance
+        attribute to True.
+        """
         try:
-            code = self.request.arguments['code'][0].decode('utf8')
-            self.set_header('content-type', "application/x-www-form-urlencoded")
-            self.set_header('cache-control', "no-cache")
-            WebApp.oauthClient.request_token(
-                code=code, redirect_uri=CONFIG['REDIRECT'], grant_type='authorization_code',
-                parser=parser)
-            self.redirect('/updateglucose')
-        except KeyError:
-            pass
+            self._dexcom = Dexcom(Config.username, Config.password)
+        except Exception:
+            raise
 
-    def get_token(self, token):
-        pass
+    def update(self):
+        """
+        Get the latest glucose reading from the associated transmitter.
+        Connects first if the instance is not connected.
+        :return: the latest glucose reading.
+        """
+        try:
+            return self._update()
+        except AttributeError:
+            self.connect()
+            return self._update()
 
-
-class StartOAuth(RequestHandler):
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
-        pass
-
-    def get(self):
-        self.redirect(WebApp.oauthClient.auth_uri(
-            scope="offline_access", response_type="code", redirect_uri=CONFIG['REDIRECT']))
-
-
-class Connect(RequestHandler):
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
-        pass
-
-    def get(self):
-        print(WebApp.oauthClient.access_token)
-        print(WebApp.oauthClient.token_expires)
-
-
-class UpdateGlucose(RequestHandler):
-    def data_received(self, chunk: bytes) -> Optional[Awaitable[None]]:
-        pass
-
-    def get(self):
-        query = {
-            'startDate': (datetime.now() - timedelta(minutes=10)).isoformat(),
-            'endDate': datetime.now().isoformat(),
-        }
-        URI = f"{CONFIG['GLUCOSE_CHECK']}?{urlencode(query)}"
-        print(URI)
-        IOLoop.current().add_callback(self.get_glucose, URI)
-
-    async def get_glucose(self, URI):
-        print(f'Token: {WebApp.oauthClient.access_token}')
-        request = HTTPRequest(URI,
-                    headers={'authorization': f'Bearer: {WebApp.oauthClient.access_token}'})
-        response = await http_client.fetch(request)
-        self.write(response.body)
-
-class WebApp:
-    from sanction import Client
-
-    application: Optional[Application] = None
-    oauthClient = Client(token_endpoint=f"https://{CURRENT_SERVER}/v2/oauth2/token",
-                    resource_endpoint=f"https://{CURRENT_SERVER}/v2/oauth2/login",
-                    client_id=CONFIG["CLIENT_ID"],
-                    client_secret=CONFIG["CLIENT_SECRET"],
-                    auth_endpoint=f"https://{CURRENT_SERVER}/v2/oauth2/login")
-
-    @classmethod
-    async def start(cls):
-        from os import getcwd
-
-        cls.application = Application([
-            ('/redirect', Redirect),
-            ('/connect', Connect),
-            ('/startoauth', StartOAuth),
-            ('/updateglucose', UpdateGlucose),
-            (r'/static/(.*)', StaticFileHandler, {'path': getcwd() + '/static'})
-        ])
-        cls.application.listen(8888)
-        await asyncio.Event().wait()
-
-    def __new__(cls):
-        asyncio.run(cls.start())
-
-
-if __name__ == '__main__':
-    WebApp()
+    def _update(self):
+        """
+        Gets the latest glucose reading from the associated transmitter
+        without connecting first.
+        :return: The latest glucose reading.
+        """
+        self._blood_glucose = self._dexcom.get_current_glucose_reading()
+        return self._blood_glucose.value
