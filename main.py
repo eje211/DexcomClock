@@ -3,12 +3,12 @@ from configparser import ConfigParser
 from pydexcom import Dexcom, GlucoseReading
 from typing import Optional
 from dataclasses import dataclass
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 credentials = ConfigParser()
 credentials.read('credentials.conf')
-
-# TODO: replace print statement with log statements.
-# TODO: put each task in its own thread.
 
 
 @dataclass
@@ -24,20 +24,14 @@ class DexcomClock:
         self._blood_glucose: Optional[GlucoseReading] = None
         self.found = False
 
-    async def connect(self):
+    def connect(self):
         """
         Connects to the Dexcom server and sets the "connected" instance
         attribute to True.
         """
-        await asyncio.sleep(0)
-        await self._call_dexcom()
-        await asyncio.sleep(0)
-
-    async def _call_dexcom(self):
-        print("Calling Dexcom...")
-        await asyncio.sleep(0)
+        logging.info("Calling Dexcom...")
         self._dexcom = Dexcom(Config.username, Config.password)
-        print('Connected with Dexcom!')
+        logging.info('Connected with Dexcom!')
         self.found = True
 
     def update(self):
@@ -62,15 +56,19 @@ class DexcomClock:
         return f'{self._blood_glucose.value}, {self._blood_glucose.trend_description}'
 
     async def message(self):
+        if logging.root.level > logging.INFO:
+            return
         while self.found is False:
-            await asyncio.sleep(0)
-            print('Waiting for response.')
-            await asyncio.sleep(0)
-            print('')
+            await asyncio.sleep(0.2)
+            logging.info('Waiting for response.')
+            await asyncio.sleep(0.2)
+            logging.info('')
 
     async def async_loop(self):
-        await asyncio.gather(self.message(), self.connect())
+        await asyncio.gather(
+            self.message(),
+            asyncio.to_thread(self.connect))
 
     def start_async_loop(self):
         asyncio.run(self.async_loop())
-        print('Done with async')
+        logging.info('Done with async')
