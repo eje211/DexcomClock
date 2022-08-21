@@ -4,6 +4,10 @@ from pydexcom import Dexcom, GlucoseReading
 from typing import Optional
 from dataclasses import dataclass
 import logging
+from collections import namedtuple
+
+GlucoseAndTrend = namedtuple('GlucoseAndTrend', ('glucose_level', 'trend_description'))
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -53,7 +57,7 @@ class DexcomClock:
         :return: The latest glucose reading.
         """
         self._blood_glucose = self._dexcom.get_current_glucose_reading()
-        return f'{self._blood_glucose.value}, {self._blood_glucose.trend_description}'
+        return GlucoseAndTrend(self._blood_glucose.value, self._blood_glucose.trend_description)
 
     async def message(self):
         if logging.root.level > logging.INFO:
