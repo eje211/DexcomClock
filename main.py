@@ -8,6 +8,7 @@ credentials = ConfigParser()
 credentials.read('credentials.conf')
 
 # TODO: replace print statement with log statements.
+# TODO: put each task in its own thread.
 
 
 @dataclass
@@ -58,7 +59,7 @@ class DexcomClock:
         :return: The latest glucose reading.
         """
         self._blood_glucose = self._dexcom.get_current_glucose_reading()
-        return self._blood_glucose.value
+        return f'{self._blood_glucose.value}, {self._blood_glucose.trend_description}'
 
     async def message(self):
         while self.found is False:
